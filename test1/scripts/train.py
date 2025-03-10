@@ -27,40 +27,7 @@ checkpoint_path = "/root/autodl-fs/checkpoints/lens_vit_checkpoint.pth"
 model = LensCNNClassifier().to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=2e-5)
-# scheduler = StepLR(optimizer, step_size=5, gamma=0.5)  # Reduce LR every 5 epochs by 50%
 
-
-# # Training Loop
-# num_epochs = 200
-# min_loss = np.inf
-# for epoch in range(num_epochs):
-#     model.train()
-#     running_loss = 0.0
-#     for images, labels in dataloader:
-#         images, labels = images.to(device), labels.to(device)
-
-#         optimizer.zero_grad()
-#         outputs = model(images)
-#         loss = criterion(outputs, labels)
-#         loss.backward()
-#         optimizer.step()
-
-#         running_loss += loss.item()
-    
-#     if (epoch+1)%20 == 0 and running_loss < min_loss:
-#          # Save model checkpoint
-#         checkpoint = {
-#             "epoch": epoch + 1,
-#             "model_state": model.state_dict(),
-#             "optimizer_state": optimizer.state_dict(),
-#             "loss": running_loss / len(dataloader),
-#         }
-#         min_loss = running_loss
-#         torch.save(checkpoint, checkpoint_path)
-#     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(dataloader)}")
-
-# print("Training Complete!")
-import torch
 
 def evaluate_model(model, device, criterion, data_loader):
     '''
@@ -112,7 +79,7 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
 valset = LensDataset("/root/autodl-fs/dataset/val")
 val_loader = DataLoader(valset, batch_size=64, shuffle=True)
-
+best_val_loss = np.inf
 model_path = "../checkpoints/cnn/"
 
 for epoch in range(20):  # Should overfit within 10 epochs
