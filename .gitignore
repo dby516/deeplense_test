@@ -9,4 +9,4 @@ test1/dataset/
 test1/dataset.zip
 
 # Ignore checkpoint
-*.pth
+test1/models/*.pth
