@@ -7,3 +7,6 @@ __pycache__/
 # Ignore dataset and ZIP files
 test1/dataset/
 test1/dataset.zip
+
+# Ignore checkpoint
+*.pth
