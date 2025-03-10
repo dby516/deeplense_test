@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 
 from data_proc import LensDataset
+from datetime import datetime
 import sys
 import os
 import numpy as np
@@ -59,16 +60,66 @@ optimizer = optim.Adam(model.parameters(), lr=2e-5)
 #     print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(dataloader)}")
 
 # print("Training Complete!")
+import torch
+
+def evaluate_model(model, device, criterion, data_loader):
+    '''
+    Evaluate the model on a test/validation set.
+
+    Returns:
+    - avg_loss (float): Average loss across all batches.
+    - accuracy (float): Model accuracy.
+    - mistakes (list): List of (input, true_label, predicted_label) for incorrect predictions.
+    '''
+    model.eval()
+    tot_loss = 0
+    correct = 0
+    total = 0
+    mistakes = []
+
+    with torch.no_grad():
+        for inputs, labels in data_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            # Forward pass
+            outputs = model(inputs)
+            
+            # Compute loss
+            loss = criterion(outputs, labels)
+            tot_loss += loss.item()
+
+            # Get predicted class
+            preds = outputs.argmax(dim=1)
+
+            # Calculate accuracy
+            total += labels.size(0)
+            correct += (preds == labels).sum().item()
+
+            # Record mistakes
+            for i in range(len(labels)):
+                if preds[i] != labels[i]:
+                    mistakes.append((inputs[i].cpu(), labels[i].cpu().item(), preds[i].cpu().item()))
+
+    # Compute average loss and accuracy
+    avg_loss = tot_loss / len(data_loader)
+    accuracy = correct / total
+
+    return avg_loss, accuracy, mistakes
 
 
-small_dataset, _ = torch.utils.data.random_split(dataset, [5000, len(dataset) - 5000])
-small_dataloader = DataLoader(small_dataset, batch_size=64, shuffle=True)
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [8000, len(dataset) - 8000])
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+valset = LensDataset("/root/autodl-fs/dataset/val")
+val_loader = DataLoader(valset, batch_size=64, shuffle=True)
+
+model_path = "../checkpoints/cnn/"
 
 for epoch in range(20):  # Should overfit within 10 epochs
     model.train()
     running_loss = 0.0
     
-    for images, labels in small_dataloader:
+    for images, labels in train_loader:
         images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad()
@@ -76,20 +127,25 @@ for epoch in range(20):  # Should overfit within 10 epochs
         loss = criterion(outputs, labels)
         loss.backward()
 
-        # ✅ Clip gradients to prevent vanishing/exploding
+        # Clip gradients to prevent vanishing/exploding
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         optimizer.step()
 
         running_loss += loss.item()
-    # for name, param in model.named_parameters():
-    #     if param.requires_grad:
-    #         print(f"{name}: Mean={param.grad.mean().item()}, Std={param.grad.std().item()}")
-    #         print(f"{name}: Mean Grad={param.grad.mean().item()}, Std Grad={param.grad.std().item()}")
-
-    #         break  # Print first param only
     
-    # scheduler.step()
-    print(f"Epoch {epoch+1}, Loss: {running_loss / len(small_dataloader)}")
+    print(f"Epoch {epoch+1}, Loss: {running_loss / len(train_loader)}")
+    # Validate every 5 epochs
+    if (epoch + 1) % 5 == 0:
+        v_loss, v_acc, _ = evaluate_model(model, device, criterion, val_loader)
+        print(f"Validate: Epoch {epoch+1}/{num_epochs}, Loss: {v_loss}, Accuracy: {v_acc}")
+        if v_loss < best_val_loss: # record the model that performs best on validation set
+            best_val_loss = v_loss
+            current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            torch.save(model.state_dict(), f"{model_path}cnn_{epoch+1}epc_{current_date}") # save model
 
-print("Done!")
+print("[INFO] Training complete!")
+
+""" Test """
+t_loss, t_acc, _ = evaluate_model(model, device, criterion, test_loader)
+print(f"Testing Result: Loss: {t_loss}, Accuracy: {t_acc}")
