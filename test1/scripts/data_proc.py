@@ -28,6 +28,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from PIL import Image
 
 class LensDataset(Dataset):
     def __init__(self, root_dir, transform=None):
@@ -63,11 +64,13 @@ class LensDataset(Dataset):
         """
         path, label = self.data[idx]
         image = np.load(path).astype(np.float32)
-        image = torch.tensor(image)
-
+        # image = image.squeeze(0)
+        # Convert NumPy to PIL Image
+        # image = Image.fromarray((image * 255).astype(np.uint8))
+        
         if self.transform:
             image = self.transform(image)
-
+        image = torch.tensor(image)
         return image, label
         
 if __name__ == "__main__":
@@ -75,7 +78,7 @@ if __name__ == "__main__":
         transforms.Normalize((0.5,), (0.5,))
     ]) # Standard normalization
     
-    dataset = LensDataset("dataset/train", transform=transform)
+    dataset = LensDataset("/root/autodl-fs/dataset/train", transform=transform)
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
     # Test loading

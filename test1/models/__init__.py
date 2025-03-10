@@ -1,2 +1,2 @@
-from ViT import *
-from cnn import *
+from .ViT import *
+from .cnn import *

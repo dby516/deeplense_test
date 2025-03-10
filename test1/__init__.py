@@ -1,1 +1,1 @@
-from data_proc import *
+from test1.scripts.data_proc import *
