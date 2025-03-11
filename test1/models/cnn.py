@@ -3,6 +3,31 @@ CNN Classifier
 
 Bingyao, 03-08-2025
 """
+"""
+Best:
+self.conv1 = nn.Conv2d(1, 16, kernel_size=7, stride=2, padding=3)  # Increased channels, stride added
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2, padding=2)  # More channels, stride added
+        self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.conv4 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn4 = nn.BatchNorm2d(128)
+
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Global Average Pooling
+        
+        self.fc1 = nn.Linear(128, num_classes)
+
+ x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        
+        x = self.global_avg_pool(x)
+        x = torch.flatten(x, 1)  
+        x = self.fc1(x)
+        return x
+"""
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -22,39 +47,93 @@ import torch.nn.functional as F
 class LensCNNClassifier(nn.Module):
     def __init__(self, num_classes=3):
         super(LensCNNClassifier, self).__init__()
-        
-        # ✅ Convolutional layers with BatchNorm
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)  # ✅ BatchNorm after conv1
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.bn2 = nn.BatchNorm2d(64)  # ✅ BatchNorm after conv2
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn3 = nn.BatchNorm2d(128)  # ✅ BatchNorm after conv3
-        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.bn4 = nn.BatchNorm2d(256)  # ✅ BatchNorm after conv4
 
-        self.pool = nn.MaxPool2d(2, 2)
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=7, stride=2, padding=3)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2, padding=2)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.conv4 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn4 = nn.BatchNorm2d(128)
+
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Global Average Pooling
         
-        # ✅ Fully Connected layers with BatchNorm
-        self.fc1 = nn.Linear(256 * 9 * 9, 512)
-        self.bn_fc1 = nn.BatchNorm1d(512)  # ✅ BatchNorm after fc1
-        self.fc2 = nn.Linear(512, 256)
-        self.bn_fc2 = nn.BatchNorm1d(256)  # ✅ BatchNorm after fc2
-        self.fc3 = nn.Linear(256, num_classes)
+        self.fc1 = nn.Linear(128, num_classes)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.bn1(self.conv1(x))))
-        x = self.pool(F.relu(self.bn2(self.conv2(x))))
-        x = self.pool(F.relu(self.bn3(self.conv3(x))))
-        x = self.pool(F.relu(self.bn4(self.conv4(x))))
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        
+        x = self.global_avg_pool(x)
+        x = torch.flatten(x, 1)  
+        x = self.fc1(x)
+        return x
 
-        x = torch.flatten(x, 1)
-        x = F.relu(self.bn_fc1(self.fc1(x)))  # ✅ BatchNorm after fc1
-        x = F.relu(self.bn_fc2(self.fc2(x)))  # ✅ BatchNorm after fc2
-        x = self.fc3(x)  # No activation here (CrossEntropyLoss expects raw logits)
+
+class CNNClassifier(nn.Module):
+    def __init__(self, num_classes=3):
+        super(CNNClassifier, self).__init__()
+
+        # ✅ More pooling in earlier layers to reduce overfitting
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.pool1 = nn.MaxPool2d(4, 4)  # ✅ Earlier downsampling
+
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.pool2 = nn.AvgPool2d(4, 4)  # ✅ More aggressive pooling
+
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.pool3 = nn.AvgPool2d(3, 3)  # ✅ Reduce feature map size further
+
+        self.conv4 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        self.bn4 = nn.BatchNorm2d(128)
+        self.pool4 = nn.MaxPool2d(3, 3)  # ✅ Ensures small feature maps before FC
+
+        # ✅ Smaller Fully Connected Layer to reduce memorization
+        self.fc1 = nn.Linear(128, num_classes)  # ✅ No hidden FC layer
+
+    def forward(self, x):
+        x = self.pool1(F.relu(self.bn1(self.conv1(x))))
+        x = self.pool2(F.relu(self.bn2(self.conv2(x))))
+        x = self.pool3(F.relu(self.bn3(self.conv3(x))))
+        x = self.pool4(F.relu(self.bn4(self.conv4(x))))
+
+        x = torch.flatten(x, 1)  # ✅ Smaller flattened size reduces FC overfitting
+        x = self.fc1(x)
 
         return x
 
+    
+
+class SimpleCNN(nn.Module):
+    def __init__(self, num_classes=3):
+        super(SimpleCNN, self).__init__()
+        
+        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(8)
+
+        self.pool = nn.MaxPool2d(3, 3)
+        self.dropout = nn.Dropout(0.3)  # Dropout added
+
+        self.fc1 = nn.Linear(20000, num_classes)
+        # self.bn_fc1 = nn.BatchNorm1d(128)
+        # self.fc2 = nn.Linear(128, num_classes)
+        
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))
+        # x = self.pool(F.relu(self.bn2(self.conv2(x))))
+        # x = self.pool(F.relu(self.bn3(self.conv3(x))))
+        x = torch.flatten(x, 1)
+        # x = self.dropout(F.relu(self.bn_fc1(self.fc1(x))))  # Dropout applied here
+        x = self.fc1(x)
+        return x
+    
 
 def init_weights(m):
     if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):

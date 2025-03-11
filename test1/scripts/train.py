@@ -2,32 +2,45 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.optim.lr_scheduler import StepLR
+import torch.optim.lr_scheduler as lr_scheduler
+
 
 from data_proc import LensDataset
 from datetime import datetime
 import sys
 import os
 import numpy as np
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "test1")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from models import *
 # Check for CUDA
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Load dataset
-dataset = LensDataset("/root/autodl-fs/dataset/train")
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+train_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dataset", "train"))
+val_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dataset", "val"))
 
-# Define checkpoint path
-checkpoint_path = "/root/autodl-fs/checkpoints/lens_vit_checkpoint.pth"
+dataset = LensDataset(train_path)
+valset = LensDataset(val_path)
 
-# Initialize
-# model = LensViTClassifier().to(device)
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [24000, len(dataset) - 24000])
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+val_loader = DataLoader(valset, batch_size=64, shuffle=True)
+
+# Hyperparameters
+best_val_loss = np.inf
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "checkpoints", "cnn", "cnn"))
+num_epochs = 100
+learning_rate = 1e-3
+
+# Initialization
 model = LensCNNClassifier().to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=2e-5)
-
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+# Cosine Annealing LR Scheduler (better convergence)
+scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+# scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=5e-3, total_steps=num_epochs * len(train_loader))
 
 def evaluate_model(model, device, criterion, data_loader):
     '''
@@ -74,15 +87,7 @@ def evaluate_model(model, device, criterion, data_loader):
     return avg_loss, accuracy, mistakes
 
 
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [8000, len(dataset) - 8000])
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
-valset = LensDataset("/root/autodl-fs/dataset/val")
-val_loader = DataLoader(valset, batch_size=64, shuffle=True)
-best_val_loss = np.inf
-model_path = "../checkpoints/cnn/"
-
-for epoch in range(20):  # Should overfit within 10 epochs
+for epoch in range(num_epochs):
     model.train()
     running_loss = 0.0
     
@@ -101,6 +106,7 @@ for epoch in range(20):  # Should overfit within 10 epochs
 
         running_loss += loss.item()
     
+    scheduler.step()
     print(f"Epoch {epoch+1}, Loss: {running_loss / len(train_loader)}")
     # Validate every 5 epochs
     if (epoch + 1) % 5 == 0:
@@ -109,7 +115,7 @@ for epoch in range(20):  # Should overfit within 10 epochs
         if v_loss < best_val_loss: # record the model that performs best on validation set
             best_val_loss = v_loss
             current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            torch.save(model.state_dict(), f"{model_path}cnn_{epoch+1}epc_{current_date}") # save model
+            torch.save(model.state_dict(), f"{model_path}_{epoch+1}epc_{current_date}.pth") # save model
 
 print("[INFO] Training complete!")
 
