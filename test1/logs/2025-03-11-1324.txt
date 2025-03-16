@@ -1,0 +1,158 @@
+Model: LensCNNClassifier
+Learning Rate: 1e-3
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+
+class LensCNNClassifier(nn.Module):
+    def __init__(self, num_classes=3):
+        super(LensCNNClassifier, self).__init__()
+
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=7, stride=2, padding=3)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2, padding=2)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.conv4 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn4 = nn.BatchNorm2d(128)
+
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Global Average Pooling
+        
+        self.fc1 = nn.Linear(128, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        
+        x = self.global_avg_pool(x)
+        x = torch.flatten(x, 1)  
+        x = self.fc1(x)
+        return x
+
+
+Using device: cuda
+Epoch 1, Loss: 1.1006075798670452
+Epoch 2, Loss: 1.100126231511434
+Epoch 3, Loss: 1.1003387899398804
+Epoch 4, Loss: 1.0997014996210734
+Epoch 5, Loss: 1.0989920937220254
+Validate: Epoch 5/100, Loss: 1.0991143836813457, Accuracy: 0.3444
+Epoch 6, Loss: 1.0990789337158202
+Epoch 7, Loss: 1.0952355289459228
+Epoch 8, Loss: 1.0488003398577372
+Epoch 9, Loss: 0.9881277890205383
+Epoch 10, Loss: 0.9582560259501139
+Validate: Epoch 10/100, Loss: 0.9474098343970412, Accuracy: 0.5168
+Epoch 11, Loss: 0.9210710531870524
+Epoch 12, Loss: 0.8950663954416911
+Epoch 13, Loss: 0.8585453626314798
+Epoch 14, Loss: 0.8251998736063639
+Epoch 15, Loss: 0.8045344177881877
+Validate: Epoch 15/100, Loss: 0.7810700520620508, Accuracy: 0.6508
+Epoch 16, Loss: 0.761686378955841
+Epoch 17, Loss: 0.7344334866205852
+Epoch 18, Loss: 0.6999404067993165
+Epoch 19, Loss: 0.6706742141246795
+Epoch 20, Loss: 0.6456107383569082
+Validate: Epoch 20/100, Loss: 0.693194474709236, Accuracy: 0.6928
+Epoch 21, Loss: 0.6201102460225423
+Epoch 22, Loss: 0.5933206566969553
+Epoch 23, Loss: 0.5745212364196778
+Epoch 24, Loss: 0.5517619859377543
+Epoch 25, Loss: 0.5298357906341553
+Validate: Epoch 25/100, Loss: 0.5638583241882971, Accuracy: 0.7716
+Epoch 26, Loss: 0.516838713645935
+Epoch 27, Loss: 0.49980336650212603
+Epoch 28, Loss: 0.48404212180773415
+Epoch 29, Loss: 0.4720285368760427
+Epoch 30, Loss: 0.4548246223926544
+Validate: Epoch 30/100, Loss: 0.6689890254352052, Accuracy: 0.7232
+Epoch 31, Loss: 0.43910274767875673
+Epoch 32, Loss: 0.4327663991451263
+Epoch 33, Loss: 0.4156419672171275
+Epoch 34, Loss: 0.4091551420291265
+Epoch 35, Loss: 0.39966226669152577
+Validate: Epoch 35/100, Loss: 0.466422947281498, Accuracy: 0.8109333333333333
+Epoch 36, Loss: 0.38899490439891815
+Epoch 37, Loss: 0.38473000955581665
+Epoch 38, Loss: 0.3652060364087423
+Epoch 39, Loss: 0.3579097817738851
+Epoch 40, Loss: 0.3549886640707652
+Validate: Epoch 40/100, Loss: 0.4319563477726306, Accuracy: 0.8310666666666666
+Epoch 41, Loss: 0.3386940838098526
+Epoch 42, Loss: 0.3320368280808131
+Epoch 43, Loss: 0.3258876020113627
+Epoch 44, Loss: 0.32061305034160614
+Epoch 45, Loss: 0.31222943433125816
+Validate: Epoch 45/100, Loss: 0.5489457603228294, Accuracy: 0.8068
+Epoch 46, Loss: 0.306792138616244
+Epoch 47, Loss: 0.2897462465961774
+Epoch 48, Loss: 0.2913261581261953
+Epoch 49, Loss: 0.28773203150431315
+Epoch 50, Loss: 0.2708052017490069
+Validate: Epoch 50/100, Loss: 0.42884466178336383, Accuracy: 0.8358666666666666
+Epoch 51, Loss: 0.2707152060270309
+Epoch 52, Loss: 0.26074838389952976
+Epoch 53, Loss: 0.25477716356515884
+Epoch 54, Loss: 0.24634439941247305
+Epoch 55, Loss: 0.24266425621509552
+Validate: Epoch 55/100, Loss: 0.4167891455403829, Accuracy: 0.8442666666666667
+Epoch 56, Loss: 0.2415087359547615
+Epoch 57, Loss: 0.2339693746169408
+Epoch 58, Loss: 0.2289815889795621
+Epoch 59, Loss: 0.22342988270521164
+Epoch 60, Loss: 0.21902064696947735
+Validate: Epoch 60/100, Loss: 0.40671863230103156, Accuracy: 0.8485333333333334
+Epoch 61, Loss: 0.21041440633932748
+Epoch 62, Loss: 0.20724891978502274
+Epoch 63, Loss: 0.19867040280501047
+Epoch 64, Loss: 0.1967718370159467
+Epoch 65, Loss: 0.18987596320112546
+Validate: Epoch 65/100, Loss: 0.4549899561551668, Accuracy: 0.84
+Epoch 66, Loss: 0.18853468759854636
+Epoch 67, Loss: 0.18494372365872067
+Epoch 68, Loss: 0.17828955015540124
+Epoch 69, Loss: 0.17357449854413667
+Epoch 70, Loss: 0.17186275698741277
+Validate: Epoch 70/100, Loss: 0.43170707148768134, Accuracy: 0.8530666666666666
+Epoch 71, Loss: 0.16471405297517777
+Epoch 72, Loss: 0.165875044465065
+Epoch 73, Loss: 0.15901369282603264
+Epoch 74, Loss: 0.1570606171488762
+Epoch 75, Loss: 0.1503291116654873
+Validate: Epoch 75/100, Loss: 0.42491979341385727, Accuracy: 0.8574666666666667
+Epoch 76, Loss: 0.15134234515825906
+Epoch 77, Loss: 0.14928375494480134
+Epoch 78, Loss: 0.14466033801436423
+Epoch 79, Loss: 0.14010459687312443
+Epoch 80, Loss: 0.13912758740782738
+Validate: Epoch 80/100, Loss: 0.4309765454066002, Accuracy: 0.8569333333333333
+Epoch 81, Loss: 0.13636339243253073
+Epoch 82, Loss: 0.13403992448747157
+Epoch 83, Loss: 0.13277872852484385
+Epoch 84, Loss: 0.12849837933977445
+Epoch 85, Loss: 0.12779196581244467
+Validate: Epoch 85/100, Loss: 0.43359309813733826, Accuracy: 0.8569333333333333
+Epoch 86, Loss: 0.12519230151176453
+Epoch 87, Loss: 0.12323274147510528
+Epoch 88, Loss: 0.12246886918942133
+Epoch 89, Loss: 0.1216095529695352
+Epoch 90, Loss: 0.1194446322719256
+Validate: Epoch 90/100, Loss: 0.42921658662163603, Accuracy: 0.8570666666666666
+Epoch 91, Loss: 0.118750812013944
+Epoch 92, Loss: 0.11760252098739148
+Epoch 93, Loss: 0.11797283956408501
+Epoch 94, Loss: 0.11677753727634747
+Epoch 95, Loss: 0.11593226385116577
+Validate: Epoch 95/100, Loss: 0.4315601647121169, Accuracy: 0.858
+Epoch 96, Loss: 0.11590301179885865
+Epoch 97, Loss: 0.11528048654894034
+Epoch 98, Loss: 0.11322501025597255
+Epoch 99, Loss: 0.11709586772322654
+Epoch 100, Loss: 0.1154259741306305
+Validate: Epoch 100/100, Loss: 0.4369524001317509, Accuracy: 0.856
+[INFO] Training complete!
+Testing Result: Loss: 0.4098314449508139, Accuracy: 0.8608333333333333
