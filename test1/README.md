@@ -82,7 +82,7 @@ scripts/eval.ipynb
 - Hyperparameters & logs: `test1/logs/2025-3-17-cnn-config.yaml`  
 - Training visualization:  
   ![CNN Training](images/train-cnn-2025-03-17-15432.png)  
-- Final test results: `test1/images/output-cnn.png`  
+- Final test results: ![CNN Testing](images/output-cnn.png)  
 
 ---
 
@@ -102,7 +102,7 @@ Residual connections allow gradients to flow through the network without degrada
 - Hyperparameters & logs: `test1/logs/2025-3-17-rescnn-config.yaml`
 - Training visualization:  
   ![ResCNN Training](images/train-rescnn-2025-03-17-150214.png)  
-- Final test results: `test1/images/output-rescnn.png`  
+- Final test results: ![ResCNN Testing](images/output-rescnn.png) 
 
 
 **Comparison with CNN:**  
