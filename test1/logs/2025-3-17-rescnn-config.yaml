@@ -1,0 +1,65 @@
+wandb_version: 1
+
+T_max:
+  desc: null
+  value: 100
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.12.21
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    python_version: 3.10.16
+    start_time: 1742236701
+    t:
+      1:
+      - 1
+      - 41
+      - 55
+      2:
+      - 1
+      - 41
+      - 55
+      3:
+      - 16
+      4: 3.10.16
+      5: 0.12.21
+      8:
+      - 5
+batch_size:
+  desc: null
+  value: 64
+dataset_size:
+  desc: null
+  value: 30000
+epochs:
+  desc: null
+  value: 100
+eta_min:
+  desc: null
+  value: 1.0e-06
+learning_rate:
+  desc: null
+  value: 0.0002
+loss_function:
+  desc: null
+  value: CrossEntropyLoss
+model:
+  desc: null
+  value: LensResCNNClassifier
+optimizer:
+  desc: null
+  value: Adam
+scheduler:
+  desc: null
+  value: CosineAnnealingLR
+test_size:
+  desc: null
+  value: 6000
+train_size:
+  desc: null
+  value: 24000
+val_size:
+  desc: null
+  value: 7500

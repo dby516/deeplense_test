@@ -16,6 +16,13 @@ from models import *
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
+# Hyperparameters
+batch_size = 64
+best_val_loss = np.inf
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "checkpoints", "cnn", "cnn"))
+num_epochs = 100
+learning_rate = 1e-3
+
 # Load dataset
 train_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dataset", "train"))
 val_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dataset", "val"))
@@ -24,15 +31,32 @@ dataset = LensDataset(train_path)
 valset = LensDataset(val_path)
 
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [24000, len(dataset) - 24000])
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
-val_loader = DataLoader(valset, batch_size=64, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(valset, batch_size=batch_size, shuffle=True)
 
-# Hyperparameters
-best_val_loss = np.inf
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "checkpoints", "cnn", "cnn"))
-num_epochs = 100
-learning_rate = 1e-3
+
+import wandb
+
+# Initialize wandb
+wandb.init(
+    project="lens-classifier",
+    config={
+        "epochs": num_epochs,
+        "batch_size": 64,
+        "learning_rate": learning_rate,
+        "model": "LensCNNClassifier",
+        "optimizer": "Adam",
+        "scheduler": "CosineAnnealingLR",
+        "loss_function": "CrossEntropyLoss",
+        "dataset_size": len(dataset),
+        "train_size": len(train_dataset),
+        "val_size": len(valset),
+        "test_size": len(test_dataset),
+        "T_max": num_epochs,
+        "eta_min": 1e-6
+    }
+)
 
 # Initialization
 model = LensCNNClassifier().to(device)
@@ -107,11 +131,27 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
     
     scheduler.step()
-    print(f"Epoch {epoch+1}, Loss: {running_loss / len(train_loader)}")
+
+    avg_train_loss = running_loss / len(train_loader)
+    wandb.log({
+        "epoch": epoch+1,
+        "train_loss": avg_train_loss,
+        "val_loss": v_loss,
+        "val_accuracy": v_acc,
+        "learning_rate": scheduler.get_last_lr()[0]
+    })
+    
+    print(f"Epoch {epoch+1}, Loss: {avg_train_loss}")
     # Validate every 5 epochs
     if (epoch + 1) % 5 == 0:
         v_loss, v_acc, _ = evaluate_model(model, device, criterion, val_loader)
         print(f"Validate: Epoch {epoch+1}/{num_epochs}, Loss: {v_loss}, Accuracy: {v_acc}")
+
+        wandb.log({
+            "epoch": epoch+1,
+            "val_loss": v_loss,
+            "val_accuracy": v_acc
+        })
         if v_loss < best_val_loss: # record the model that performs best on validation set
             best_val_loss = v_loss
             current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -122,3 +162,5 @@ print("[INFO] Training complete!")
 """ Test """
 t_loss, t_acc, _ = evaluate_model(model, device, criterion, test_loader)
 print(f"Testing Result: Loss: {t_loss}, Accuracy: {t_acc}")
+
+wandb.log({"test_loss": t_loss, "test_accuracy": t_acc})
