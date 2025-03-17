@@ -1,7 +1,3 @@
-Here's a refined and well-structured **README** for your project:  
-
----
-
 # **Common Test I: Multi-Class Classification**  
 
 ## **Task**  
