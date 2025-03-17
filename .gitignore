@@ -7,6 +7,4 @@ __pycache__/
 # Ignore dataset and ZIP files
 test1/dataset/
 test1/dataset.zip
-
-# Ignore checkpoint
-test1/models/*.pth
+test4/Samples/
