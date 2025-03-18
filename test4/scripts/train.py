@@ -1,20 +1,17 @@
-# Import packages
+# Import necessary packages
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
-import torch.optim.lr_scheduler as lr_scheduler
+import numpy as np
+import wandb
+from datetime import datetime
 
 from data_proc import LensDataset
-from datetime import datetime
-import sys
 import os
-import numpy as np
+import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from models import *
-
-import wandb
+from models import *  # Now imports correctly
 
 # Check for CUDA
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -22,140 +19,152 @@ print(f"Using device: {device}")
 
 # Load dataset
 batch_size = 64
-
-data_dir = "../Samples"
+data_dir = "/home/bingyao/deeplense/test4/Samples"
 dataset = LensDataset(data_dir, transform=None)
-train_size = int(dataset*0.8)
+train_size = int(len(dataset) * 0.8)
 train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, len(dataset) - train_size])
+
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
-
 # Hyperparameters
-best_val_loss = np.inf
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "checkpoints", "cnn", "cnn"))
 num_epochs = 100
-learning_rate = 1e-3
-
-# Initialize model, optimizer, criterion
+learning_rate = 1e-4
+timesteps = 1000
+best_val_loss = np.inf
+# Initialize model & optimizer
 model = UNet().to(device)
-criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-# Cosine Annealing LR Scheduler (better convergence)
-# scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
+criterion = nn.MSELoss()
 
 # Initialize wandb
 wandb.init(
-    project="lens-classifier",
+    project="lens-diffusion",
     config={
         "epochs": num_epochs,
         "batch_size": batch_size,
         "learning_rate": learning_rate,
-        "model": "UNet",
+        "model": "UNet-DDPM",
         "optimizer": "Adam",
-        "loss_function": "CrossEntropyLoss",
+        "loss_function": "MSELoss",
+        "timesteps": timesteps,
         "dataset_size": len(dataset),
         "train_size": len(train_dataset),
         "val_size": len(val_dataset),
     }
 )
 
-# Training, testing
-best_model = model
-def evaluate_model(model, device, criterion, data_loader):
-    '''
-    Evaluate the model on a test/validation set.
+# Noise scheduler (Linear for DDPM)
+def linear_noise_schedule(t, beta_start=1e-4, beta_end=0.02):
+    return beta_start + (beta_end - beta_start) * t / timesteps
 
-    Returns:
-    - avg_loss (float): Average loss across all batches.
-    - accuracy (float): Model accuracy.
-    - mistakes (list): List of (input, true_label, predicted_label) for incorrect predictions.
-    '''
-    model.eval()
-    tot_loss = 0
-    correct = 0
-    total = 0
-    mistakes = []
+betas = torch.linspace(1e-4, 0.02, timesteps).to(device)
+alphas = 1.0 - betas
+alpha_cumprod = torch.cumprod(alphas, dim=0)
 
-    with torch.no_grad():
-        for inputs, labels in data_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
+def add_noise(x, t, noise=None):
+    """
+    Adds noise to the image x at a specific timestep t using the forward diffusion process.
+    """
+    if noise is None:
+        noise = torch.randn_like(x).to(device)
+    sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod[t]).view(-1, 1, 1, 1)
+    sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod[t]).view(-1, 1, 1, 1)
+    return sqrt_alpha_cumprod * x + sqrt_one_minus_alpha_cumprod * noise, noise
 
-            # Forward pass
-            outputs = model(inputs)
-            
-            # Compute loss
-            loss = criterion(outputs, labels)
-            tot_loss += loss.item()
-
-            # Get predicted class
-            preds = outputs.argmax(dim=1)
-
-            # Calculate accuracy
-            total += labels.size(0)
-            correct += (preds == labels).sum().item()
-
-            # Record mistakes
-            for i in range(len(labels)):
-                if preds[i] != labels[i]:
-                    mistakes.append((inputs[i].cpu(), labels[i].cpu().item(), preds[i].cpu().item()))
-
-    # Compute average loss and accuracy
-    avg_loss = tot_loss / len(data_loader)
-    accuracy = correct / total
-
-    return avg_loss, accuracy, mistakes
-
-
+# Training loop
 for epoch in range(num_epochs):
     model.train()
     running_loss = 0.0
-    
-    for images, labels in train_loader:
-        images, labels = images.to(device), labels.to(device)
+
+    for images in train_loader:
+        images = images.to(device)
+        batch_size = images.shape[0]
+        
+        # Sample random timesteps
+        t = torch.randint(0, timesteps, (batch_size,), device=device).long()
+
+        # Add noise to the images
+        noisy_images, noise = add_noise(images, t)
+
+        # Predict the noise using the model
+        pred_noise = model(noisy_images, t.float())
+
+        # Compute loss (how well the model predicts noise)
+        loss = criterion(pred_noise, noise)
 
         optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
         loss.backward()
-
-        # Clip gradients to prevent vanishing/exploding
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
         optimizer.step()
 
         running_loss += loss.item()
-    
-    # scheduler.step()
 
     avg_train_loss = running_loss / len(train_loader)
-    wandb.log({
-        "epoch": epoch+1,
-        "train_loss": avg_train_loss,
-        # "learning_rate": scheduler.get_last_lr()[0]
-    })
-    
-    print(f"Epoch {epoch+1}, Loss: {avg_train_loss}")
-    # Validate every 5 epochs
-    if (epoch + 1) % 5 == 0:
-        v_loss, v_acc, _ = evaluate_model(model, device, criterion, val_loader)
-        print(f"Validate: Epoch {epoch+1}/{num_epochs}, Loss: {v_loss}, Accuracy: {v_acc}")
 
+    # Log training loss
+    wandb.log({"epoch": epoch+1, "train_loss": avg_train_loss})
+
+    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_train_loss}")
+
+    # Evaluate every 5 epochs
+    if (epoch + 1) % 5 == 0:
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for images in val_loader:
+                images = images.to(device)
+                batch_size = images.shape[0]
+                t = torch.randint(0, timesteps, (batch_size,), device=device).long()
+
+                noisy_images, noise = add_noise(images, t)
+                pred_noise = model(noisy_images, t.float())
+                val_loss += criterion(pred_noise, noise).item()
+
+        avg_val_loss = val_loss / len(val_loader)
+
+        # Log validation loss
         wandb.log({
             "epoch": epoch+1,
-            "val_loss": v_loss,
-            "val_accuracy": v_acc
+            "val_loss": avg_val_loss,
         })
-        if v_loss < best_val_loss: # record the model that performs best on validation set
-            best_val_loss = v_loss
+
+        print(f"Validate: Epoch {epoch+1}/{num_epochs}, Loss: {avg_val_loss}")
+
+        # Save best model based on validation loss
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
             best_model = model
             current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            torch.save(model.state_dict(), f"{model_path}_{epoch+1}epc_{current_date}.pth") # save model
+            model_save_path = f"/home/bingyao/deeplense/test4/checkpoints/ddpm_{epoch+1}epc_{current_date}.pth"
+            torch.save(model.state_dict(), model_save_path)
+            print(f"[INFO] Best model saved at {model_save_path}")
 
 print("[INFO] Training complete!")
 
-# Evaluation
-t_loss, t_acc, _ = evaluate_model(best_model, device, criterion, val_loader)
-print(f"Testing Result: Loss: {t_loss}, Accuracy: {t_acc}")
+# Generate & evaluate images
+def generate_samples(model, num_samples=16):
+    model.eval()
+    samples = torch.randn((num_samples, 1, 64, 64)).to(device)  # Start from random noise
 
-wandb.log({"test_loss": t_loss, "test_accuracy": t_acc})
+    with torch.no_grad():
+        for i in reversed(range(timesteps)):
+            t = torch.full((num_samples,), i, device=device).long()
+            noise_pred = model(samples, t.float())
+
+            if i > 0:
+                beta_t = betas[i]
+                alpha_t = alphas[i]
+                noise = torch.randn_like(samples) if i > 1 else torch.zeros_like(samples)
+                samples = (samples - beta_t / torch.sqrt(1 - alpha_t) * noise_pred) / torch.sqrt(alpha_t) + torch.sqrt(beta_t) * noise
+
+    return samples
+
+generated_images = generate_samples(model, num_samples=16)
+
+# Compute FID using real vs generated images
+from pytorch_fid import fid_score
+
+fid = fid_score.calculate_fid_given_paths(["/home/bingyao/deeplense/test4/Samples", "generated_samples"], 64, device, 2048)
+wandb.log({"FID Score": fid})
+
+print(f"FID Score: {fid}")
