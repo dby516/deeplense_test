@@ -1,3 +1,13 @@
+"""
+Diffusion Model Training Script
+
+This script trains the diffusion model to generate lens images.
+
+Example usage: python script/train.py
+
+Bingyao Du, 3-18-2025
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
