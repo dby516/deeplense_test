@@ -1,0 +1,19 @@
+Run Path: bd2747-columbia-university/lens-diffusion/eu2cpf6u
+
+Config Parameters:
+  batch_size:64
+  dataset_size:10,000
+  epochs:100
+  learning_rate:0.0001
+  loss_function:"MSE+SSIM"
+  model:"UNet-DDPM"
+  optimizer:"Adam"
+  timesteps:1,000
+  train_size:8,000
+  val_size:2,000
+
+Summary Metrics:
+  epoch:100
+  learning_rate:0.0001
+  train_loss:0.022284229829907416
+  val_loss:0.06508019135799259

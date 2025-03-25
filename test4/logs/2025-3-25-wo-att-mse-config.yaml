@@ -1,0 +1,18 @@
+Run Path: bd2747-columbia-university/lens-diffusion/oernsnl8
+
+Config Parameters:
+  batch_size:64
+  dataset_size:10,000
+  epochs:100
+  learning_rate:0.0001
+  loss_function:"MSELoss"
+  model:"UNet-DDPM"
+  optimizer:"Adam"
+  timesteps:1,000
+  train_size:8,000
+  val_size:2,000
+
+Summary Metrics:
+  epoch:100
+  train_loss:0.003499399581924081
+  val_loss:0.0031376405531773344
