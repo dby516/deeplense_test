@@ -8,3 +8,5 @@ __pycache__/
 test1/dataset/
 test1/dataset.zip
 test4/Samples/
+test4/Samples_subset/
+test4/generated_samples/
