@@ -1,43 +1,54 @@
-# Import necessary packages
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-import numpy as np
+import torch.optim.lr_scheduler as lr_scheduler
+from torch.utils.data import DataLoader, random_split
+from pytorch_msssim import ssim
 import wandb
 from datetime import datetime
-
-from data_proc import LensDataset
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from models import *  # Now imports correctly
+from data_proc import LensDataset
+from models import UNet, UNetAtt
 
-# Check for CUDA
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Device setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Load dataset
+# Dataset & DataLoader
 batch_size = 64
 data_dir = "/home/bingyao/deeplense/test4/Samples"
 dataset = LensDataset(data_dir, transform=None)
 train_size = int(len(dataset) * 0.8)
-train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, len(dataset) - train_size])
+val_size = len(dataset) - train_size
+train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
 # Hyperparameters
 num_epochs = 100
 learning_rate = 1e-4
 timesteps = 1000
-best_val_loss = np.inf
-# Initialize model & optimizer
+best_val_loss = float('inf')
+
+# Model, optimizer, scheduler
 model = UNet().to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-criterion = nn.MSELoss()
+# criterion = nn.MSELoss()
+# scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
-# Initialize wandb
+# Loss functions
+mse_loss_fn = nn.MSELoss()
+
+def combined_loss(output, target, alpha=0.64):
+    ssim_loss = 1 - ssim(output, target, data_range=1.0, size_average=True)
+    mse_loss = mse_loss_fn(output, target)
+    return alpha * mse_loss + (1 - alpha) * ssim_loss
+
+# WandB initialization
 wandb.init(
     project="lens-diffusion",
     config={
@@ -46,125 +57,81 @@ wandb.init(
         "learning_rate": learning_rate,
         "model": "UNet-DDPM",
         "optimizer": "Adam",
-        "loss_function": "MSELoss",
+        "loss_function": "MSE+SSIM",
+        # "scheduler": "CosineAnnealingLR",
         "timesteps": timesteps,
         "dataset_size": len(dataset),
-        "train_size": len(train_dataset),
-        "val_size": len(val_dataset),
+        "train_size": train_size,
+        "val_size": val_size,
     }
 )
 
-# Noise scheduler (Linear for DDPM)
-def linear_noise_schedule(t, beta_start=1e-4, beta_end=0.02):
-    return beta_start + (beta_end - beta_start) * t / timesteps
-
+# Noise scheduler (DDPM)
 betas = torch.linspace(1e-4, 0.02, timesteps).to(device)
 alphas = 1.0 - betas
 alpha_cumprod = torch.cumprod(alphas, dim=0)
 
-def add_noise(x, t, noise=None):
-    """
-    Adds noise to the image x at a specific timestep t using the forward diffusion process.
-    """
-    if noise is None:
-        noise = torch.randn_like(x).to(device)
+def add_noise(x, t):
+    noise = torch.randn_like(x).to(device)
     sqrt_alpha_cumprod = torch.sqrt(alpha_cumprod[t]).view(-1, 1, 1, 1)
     sqrt_one_minus_alpha_cumprod = torch.sqrt(1 - alpha_cumprod[t]).view(-1, 1, 1, 1)
     return sqrt_alpha_cumprod * x + sqrt_one_minus_alpha_cumprod * noise, noise
 
 # Training loop
-for epoch in range(num_epochs):
+for epoch in range(1, num_epochs + 1):
     model.train()
-    running_loss = 0.0
+    train_loss = 0.0
 
     for images in train_loader:
         images = images.to(device)
-        batch_size = images.shape[0]
-        
-        # Sample random timesteps
-        t = torch.randint(0, timesteps, (batch_size,), device=device).long()
+        batch_size_current = images.size(0)
 
-        # Add noise to the images
+        t = torch.randint(0, timesteps, (batch_size_current,), device=device).long()
         noisy_images, noise = add_noise(images, t)
 
-        # Predict the noise using the model
         pred_noise = model(noisy_images, t.float())
-
-        # Compute loss (how well the model predicts noise)
-        loss = criterion(pred_noise, noise)
+        loss = combined_loss(pred_noise, noise)
+        # loss = criterion(pred_noise, noise)
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        running_loss += loss.item()
+        train_loss += loss.item()
 
-    avg_train_loss = running_loss / len(train_loader)
+    # scheduler.step()
+    avg_train_loss = train_loss / len(train_loader)
+    wandb.log({"epoch": epoch, "train_loss": avg_train_loss})
 
-    # Log training loss
-    wandb.log({"epoch": epoch+1, "train_loss": avg_train_loss})
+    print(f"Epoch [{epoch}/{num_epochs}], Train Loss: {avg_train_loss:.4f}")
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_train_loss}")
-
-    # Evaluate every 5 epochs
-    if (epoch + 1) % 5 == 0:
+    # Validation
+    if epoch % 5 == 0:
         model.eval()
         val_loss = 0.0
+
         with torch.no_grad():
             for images in val_loader:
                 images = images.to(device)
-                batch_size = images.shape[0]
-                t = torch.randint(0, timesteps, (batch_size,), device=device).long()
-
+                batch_size_current = images.size(0)
+                t = torch.randint(0, timesteps, (batch_size_current,), device=device).long()
                 noisy_images, noise = add_noise(images, t)
+
                 pred_noise = model(noisy_images, t.float())
-                val_loss += criterion(pred_noise, noise).item()
+                val_loss += combined_loss(pred_noise, noise).item()
+                # val_loss += criterion(pred_noise, noise).item()
 
         avg_val_loss = val_loss / len(val_loader)
+        wandb.log({"epoch": epoch, "val_loss": avg_val_loss, "learning_rate": optimizer.param_groups[0]['lr']})
 
-        # Log validation loss
-        wandb.log({
-            "epoch": epoch+1,
-            "val_loss": avg_val_loss,
-        })
+        print(f"Epoch [{epoch}/{num_epochs}], Val Loss: {avg_val_loss:.4f}")
 
-        print(f"Validate: Epoch {epoch+1}/{num_epochs}, Loss: {avg_val_loss}")
-
-        # Save best model based on validation loss
+        # Save best model
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            best_model = model
-            current_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            model_save_path = f"/home/bingyao/deeplense/test4/checkpoints/ddpm_{epoch+1}epc_{current_date}.pth"
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            model_save_path = f"/home/bingyao/deeplense/test4/checkpoints/att/ddpm_{epoch}epc_{timestamp}.pth"
             torch.save(model.state_dict(), model_save_path)
-            print(f"[INFO] Best model saved at {model_save_path}")
+            print(f"Best model saved at {model_save_path}")
 
-print("[INFO] Training complete!")
-
-# Generate & evaluate images
-def generate_samples(model, num_samples=16):
-    model.eval()
-    samples = torch.randn((num_samples, 1, 64, 64)).to(device)  # Start from random noise
-
-    with torch.no_grad():
-        for i in reversed(range(timesteps)):
-            t = torch.full((num_samples,), i, device=device).long()
-            noise_pred = model(samples, t.float())
-
-            if i > 0:
-                beta_t = betas[i]
-                alpha_t = alphas[i]
-                noise = torch.randn_like(samples) if i > 1 else torch.zeros_like(samples)
-                samples = (samples - beta_t / torch.sqrt(1 - alpha_t) * noise_pred) / torch.sqrt(alpha_t) + torch.sqrt(beta_t) * noise
-
-    return samples
-
-generated_images = generate_samples(model, num_samples=16)
-
-# Compute FID using real vs generated images
-from pytorch_fid import fid_score
-
-fid = fid_score.calculate_fid_given_paths(["/home/bingyao/deeplense/test4/Samples", "generated_samples"], 64, device, 2048)
-wandb.log({"FID Score": fid})
-
-print(f"FID Score: {fid}")
+print("Training complete!")

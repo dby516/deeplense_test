@@ -66,6 +66,16 @@ class LensDataset(Dataset):
         plt.axis("off")
         plt.show()
 
+    def vis_img(image):
+        """ Visualize an imag """
+        if image.ndim == 3 and image.shape[0] == 1:
+            image = image.squeeze(0)  # Converts (1, H, W) → (H, W)
+
+        plt.imshow(image, cmap="gray")
+        plt.title(f"Sample Image")
+        plt.axis("off")
+        plt.show()
+
 if __name__ == "__main__":
     transform = transforms.Compose([
         transforms.Normalize((0.5,), (0.5,))  # Standard normalization
