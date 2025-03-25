@@ -16,39 +16,41 @@ Use qualitative assessments and quantitative metrics such as Fréchet Inception 
 ## **Approach & Strategy**  
 
 ### **Model Selection**  
-The following architectures are explored:  
-- **CNN** – Baseline architecture inspired by lensing classification studies.  
-- **ResCNN** – CNN with residual connections to enhance feature propagation.  
-- **ViT** – Vision Transformer for long-range spatial dependencies.  
+Explored architectures include:  
+- **UNet** – Efficient at capturing local spatial details through convolutional layers.
+  - **With self-attention** – Enhances modeling by explicitly capturing long-range dependencies and global image structures.
+  - **Without self-attention** – Effective locally but struggles to represent global structures, causing blurry or less coherent outputs.
+
+Loss functions considered:  
+- **MSE (Mean Squared Error)** – Minimizes pixel-wise errors, effective for sharpness but often results in blurry images due to averaging.
+- **SSIM (Structural Similarity Index)** – Optimizes perceptual similarity, preserving global structure and texture patterns.
 
 ### **Training Details**  
-- **Loss Function:** Cross-Entropy  
 - **Optimizer:** Adam  
-- **Scheduler:** Cosine Annealing LR  
-- **Data Preprocessing:** Min-max normalization (pre-applied), optional augmentation  
+- **Scheduler:** Cosine Annealing LR (optional, improves convergence and avoids local minima)
 
 ---
 
 ## **Usage**  
 
-### **1️⃣ Extract Dataset**  
-Convert NPY images into a PyTorch dataset:  
+### **Extract Dataset**  
+Convert `.npy` gravitational lens images into a PyTorch dataset:  
 ```bash
 python scripts/data_proc.py
 ```
+or use the notebook:
+```bash
+scripts/notebooks/data_proc.ipynb
+```
 
-### **2️⃣ Train Model**  
-Train using PyTorch or Keras. Training logs, hyperparameters, and outputs are recorded in **WandB**.  
+### **Train Model**  
+Training progress, hyperparameters, and outputs are logged using **Weights & Biases (WandB)**:  
 ```bash
 python scripts/train.py
 ```
-Alternatively, run the Jupyter Notebook:  
-```bash
-scripts/train.ipynb
-```
 
-### **3️⃣ Evaluate & Visualize**  
-Generate **ROC-AUC curves** and model analysis:  
+### **Evaluate & Visualize**  
+Compute **FID Score** and analyze generated samples:
 ```bash
 scripts/eval.ipynb
 ```
@@ -57,50 +59,38 @@ scripts/eval.ipynb
 
 ## **Results & Findings**  
 
-### **Differences in Lens Structures**  
-- **No Substructure**: Clean arcs with smooth mass distribution.  
-- **Subhalo Substructure**: Distorted arcs due to small-scale gravitational perturbations.  
-- **Vortex Substructure**: Complex patterns indicating unconventional gravitational effects.  
+### **Observations from Sample Data**  
+- Gravitational lens images typically exhibit subtle arcs, rings, and complex global structures.
+- Maintaining sharpness of lensing patterns is crucial; global coherence significantly affects visual realism.
 
-### **CNN: Standard Convolutional Approach**  
-**Architecture:** Based on [Gravitational Lens Classification via CNNs](https://arxiv.org/abs/1905.04303).  
-**Key Feature:** **Adaptive Average Pooling** to reduce overfitting (better than traditional max pooling).  
+### **UNet (CNN-only with MSE Loss)**  
+Pure convolutional UNet struggles to capture global patterns, resulting in clear local structures but incoherent or blurred overall shapes.
 
 **Training Results:**  
-- Hyperparameters & logs: `test1/logs/2025-3-17-cnn-config.yaml`  
-- Training visualization:  
-  ![CNN Training](images/train-cnn-2025-03-17-15432.png)  
-- Final test results: ![CNN Testing](images/output-cnn.png)  
+- Hyperparameters & logs: `test4/logs/2025-3-25-wo-att-mse-config.yaml`  
+- Analysis details: see `scripts/eval.ipynb`
 
 ---
 
-### **ResCNN: Residual Learning for Better Convergence**  
-**Why Residual Blocks?**  
-Residual connections allow gradients to flow through the network without degradation, making training deeper networks feasible.  
+### **UNet with Self-Attention**  
 
-**Key Features:**  
-- **Larger receptive fields** using **5x5** and **3x3 kernels** in residual blocks.  
-- **Dropout (0.2)** to mitigate overfitting.  
+**Why self-attention?**  
+Self-attention explicitly models global dependencies across the image, addressing the CNN's limitations in representing spatially distant structures. It allows the network to effectively capture global lens structures.
 
-**Training Insights:**  
-- **ResCNN converges faster** than vanilla CNN due to skip connections.  
-- **More stable gradients**, reducing vanishing/exploding issues.
+**Key Benefits:**  
+- Improved representation of global patterns like arcs and rings.
+- More coherent structural details in generated images.
 
-**Training Results:**  
-- Hyperparameters & logs: `test1/logs/2025-3-17-rescnn-config.yaml`
-- Training visualization:  
-  ![ResCNN Training](images/train-rescnn-2025-03-17-150214.png)  
-- Final test results: ![ResCNN Testing](images/output-rescnn.png) 
+#### Choice of Loss Function: MSE vs. MSE + SSIM  
+- **Pure MSE:** Stable and faster convergence but produces less visually convincing global structures.
+- **MSE + SSIM:** Better maintains perceptual quality and structural coherence, though validation loss experiences more fluctuations during training.
 
-
-**Comparison with CNN:**  
-- CNN achieves **good performance but struggles with complex structures**.  
-- ResCNN maintains performance while being **less prone to overfitting**.  
+Both approaches reach comparable final losses (~0.003) after 100 epochs. Using SSIM is recommended for improved perceptual realism.
 
 ---
 
 ## **Next Steps**  
-Experiment with **Vision Transformers (ViT)**.
-Try **self-supervised pretraining** before fine-tuning on lens classification.
-
-**Stay tuned for further model improvements!**  
+- Experiment with advanced perceptual losses (e.g., VGG perceptual loss).
+- Further hyperparameter tuning (learning rates, scheduler parameters).
+- Explore conditional diffusion models to control generation quality explicitly.
+- Expand dataset size and augmentations to enhance generalization.
